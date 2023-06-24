@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<plurals name="edit_nextNotification">
+		<item quantity="one">Next notification in %1$d day, on %2$s.</item>
+		<item quantity="other">Next notification in %1$d days, on %2$s.</item>
+	</plurals>
+</resources>

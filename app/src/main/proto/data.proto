@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+option java_package = "vn.name.leduyquang753.spacious.proto";
+option java_multiple_files = true;
+
+message Data {
+	bool enable_notifications = 1;
+	int32 notification_time = 2;
+	int32 last_notification_date = 3;
+	int64 next_id = 4;
+	repeated Reminder reminders = 5;
+}
+
+message Reminder {
+	int64 id = 1;
+	string name = 2;
+	bool recurring = 3;
+	int32 date = 4;
+	int32 recurring_amount = 5;
+	RecurringUnit recurring_unit = 6;
+	string notification_text = 7;
+}
+
+enum RecurringUnit {
+	DAYS = 0;
+	MONTHS = 1;
+	YEARS = 2;
+}
