@@ -6,44 +6,48 @@ import vn.name.leduyquang753.spacious.proto.Reminder;
 fun getNextNotification(
 	recurring: Boolean, reminderDate: Date, recurringAmount: Int, recurringUnit: RecurringUnit, today: Date
 ): Date {
-	if (!recurring || today.index < reminderDate.index) return reminderDate;
-	when (recurringUnit) {
-		RecurringUnit.DAYS -> {
-			return Date(
-				reminderDate.index
-				+ (today.index-reminderDate.index+recurringAmount) / recurringAmount * recurringAmount
-			);
+	if (!recurring || today.index < reminderDate.index || recurringAmount > 100000) return reminderDate;
+	try {
+		when (recurringUnit) {
+			RecurringUnit.DAYS -> {
+				return Date(
+					reminderDate.index
+					+ (today.index-reminderDate.index+recurringAmount) / recurringAmount * recurringAmount
+				);
+			}
+			RecurringUnit.MONTHS -> {
+				val startMonthIndex = getMonthIndex(reminderDate);
+				val currentMonthIndex = getMonthIndex(today);
+				var nextMonthIndex = (
+					startMonthIndex
+					+ (currentMonthIndex-startMonthIndex) / recurringAmount * recurringAmount
+				);
+				if (
+					currentMonthIndex > nextMonthIndex
+					|| (currentMonthIndex == nextMonthIndex && today.day >= reminderDate.day)
+				) nextMonthIndex += recurringAmount;
+				return Date(reminderDate.day, nextMonthIndex % 12 + 1, nextMonthIndex / 12);
+			}
+			RecurringUnit.YEARS -> {
+				var nextYear = (
+					reminderDate.year
+					+ (today.year-reminderDate.year) / recurringAmount * recurringAmount
+				);
+				if (
+					today.year > nextYear
+					|| (today.year == nextYear && (
+						today.month > reminderDate.month
+						|| (today.month == reminderDate.month && today.day >= reminderDate.day)
+					))
+				) nextYear += recurringAmount;
+				return Date(reminderDate.day, reminderDate.month, nextYear);
+			}
+			else -> {
+				return reminderDate;
+			}
 		}
-		RecurringUnit.MONTHS -> {
-			val startMonthIndex = getMonthIndex(reminderDate);
-			val currentMonthIndex = getMonthIndex(today);
-			var nextMonthIndex = (
-				startMonthIndex
-				+ (currentMonthIndex-startMonthIndex) / recurringAmount * recurringAmount
-			);
-			if (
-				currentMonthIndex > nextMonthIndex
-				|| (currentMonthIndex == nextMonthIndex && today.day >= reminderDate.day)
-			) nextMonthIndex += recurringAmount;
-			return Date(reminderDate.day, nextMonthIndex % 12 + 1, nextMonthIndex / 12);
-		}
-		RecurringUnit.YEARS -> {
-			var nextYear = (
-				reminderDate.year
-				+ (today.year-reminderDate.year) / recurringAmount * recurringAmount
-			);
-			if (
-				today.year > nextYear
-				|| (today.year == nextYear && (
-					today.month > reminderDate.month
-					|| (today.month == reminderDate.month && today.day >= reminderDate.day)
-				))
-			) nextYear += recurringAmount;
-			return Date(reminderDate.day, reminderDate.month, nextYear);
-		}
-		else -> {
-			return reminderDate;
-		}
+	} catch (e: Date.InvalidDateException) {
+		return reminderDate;
 	}
 }
 

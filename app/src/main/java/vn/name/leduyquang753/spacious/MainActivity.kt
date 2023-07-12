@@ -61,6 +61,7 @@ import androidx.compose.runtime.mutableLongStateOf;
 import androidx.compose.runtime.mutableStateOf;
 import androidx.compose.runtime.remember;
 import androidx.compose.runtime.rememberCoroutineScope;
+import androidx.compose.runtime.saveable.mapSaver;
 import androidx.compose.runtime.saveable.rememberSaveable;
 import androidx.compose.runtime.setValue;
 import androidx.compose.ui.Alignment;
@@ -122,50 +123,52 @@ class MainActivity: ComponentActivity() {
 		setContent { SpaciousTheme { Surface(
 			modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background
 		) {
+			var tappedReminderId by rememberSaveable { mutableLongStateOf(intent.getLongExtra("id", -1L)); };
 			val navigationController = rememberNavController();
 			NavHost(navigationController, "main") {
 				composable("main") {
-					MainScreen(dataStore, intent) { navigationController.navigate("settings"); };
+					MainScreen(dataStore, tappedReminderId) { navigationController.navigate("settings"); };
+					tappedReminderId = -1;
 				};
 				composable("settings") {
 					SettingsScreen(dataStore, { time ->
-						if (time == null) {
-							alarmManager.cancel(notificationIntent);
-						} else {
-							setupNotification(time / 100, time % 100);
-						}
+						if (time == null) alarmManager.cancel(notificationIntent);
+						else setupNotification(
+							this@MainActivity, time / 100, time % 100, NotificationScheduleType.TODAY_OR_TOMORROW
+						);
 					}) { navigationController.popBackStack(); };
 				};
 			};
 		}; }; };
 	}
-
-	private fun setupNotification(hour: Int, minute: Int) {
-		if (alarmManager.nextAlarmClock != null) alarmManager.cancel(notificationIntent);
-		alarmManager.setRepeating(
-			AlarmManager.RTC_WAKEUP,
-			run {
-				val timezone = ZoneId.systemDefault();
-				val now = ZonedDateTime.ofInstant(Instant.now(), timezone);
-				var alarmTime = ZonedDateTime.of(
-					now.year, now.monthValue, now.dayOfMonth, hour, minute, 0, 0, timezone
-				).toEpochSecond();
-				if (now.toEpochSecond() > alarmTime) alarmTime += 24L * 60L * 60L;
-				
-				alarmTime * 1000;
-			},
-			24L * 60L * 60L * 1000L,
-			notificationIntent
-		);
-	}
 }
 
 @Composable
-fun MainScreen(dataStore: DataStore<Data>, intent: Intent, goToSettings: () -> Unit) {
+fun MainScreen(dataStore: DataStore<Data>, tappedReminderId: Long, goToSettings: () -> Unit) {
 	val coroutineScope = rememberCoroutineScope();
 	
 	val data by dataStore.data.collectAsStateWithLifecycle(DataSerializer.defaultValue);
-	var editingReminder by rememberSaveable { mutableStateOf<Reminder?>(null); };
+	var editingReminder by rememberSaveable(stateSaver = mapSaver(
+		save = { reminder -> if (reminder == null) mapOf("present" to false) else mapOf(
+			"present" to true,
+			"id" to reminder.id,
+			"name" to reminder.name,
+			"recurring" to reminder.recurring,
+			"date" to reminder.date,
+			"recurringAmount" to reminder.recurringAmount,
+			"recurringUnit" to reminder.recurringUnit.name,
+			"notificationText" to reminder.notificationText
+		); },
+		restore = { map -> if (map["present"] as Boolean) reminder {
+			id = map["id"] as Long;
+			name = map["name"] as String;
+			recurring = map["recurring"] as Boolean;
+			date = map["date"] as Int;
+			recurringAmount = map["recurringAmount"] as Int;
+			recurringUnit = RecurringUnit.valueOf(map["recurringUnit"] as String);
+			notificationText = map["notificationText"] as String;
+		} else null; }
+	)){ mutableStateOf(null); };
 	var deletingReminder by rememberSaveable { mutableLongStateOf(-1L); };
 	var deletingReminderName by rememberSaveable { mutableStateOf(""); };
 	
@@ -270,9 +273,8 @@ fun MainScreen(dataStore: DataStore<Data>, intent: Intent, goToSettings: () -> U
 		text = { Text(stringResource(R.string.delete_description, deletingReminderName)); }
 	);
 
-	LaunchedEffect(intent) {
-		val tappedId = intent.getLongExtra("id", -1L);
-		for (reminder in dataStore.data.first().remindersList) if (reminder.id == tappedId) {
+	LaunchedEffect(tappedReminderId) {
+		for (reminder in dataStore.data.first().remindersList) if (reminder.id == tappedReminderId) {
 			editingReminder = reminder;
 			break;
 		}
@@ -320,7 +322,7 @@ fun EditReminderDialog(editingReminder: Reminder, onDismiss: (Reminder?) -> Unit
 		title = { Text(stringResource(
 			if (editingReminder.id == 0L) R.string.edit_addReminder else R.string.edit_editReminder
 		)); },
-		text = { Column {
+		text = { Column(Modifier.verticalScroll(rememberScrollState())) {
 			TextField(
 				reminderName,
 				{ newName -> reminderName = newName; },
